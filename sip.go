@@ -25,6 +25,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/log"
 )
 
@@ -180,6 +181,7 @@ func MakeOptions(sess Session) []tea.ProgramOption {
 	return []tea.ProgramOption{
 		tea.WithInput(ptySlave),
 		tea.WithOutput(ptySlave),
+		tea.WithColorProfile(colorprofile.Env(envs)),
 		tea.WithWindowSize(pty.Width, pty.Height),
 		tea.WithEnvironment(envs),
 		tea.WithFilter(func(_ tea.Model, msg tea.Msg) tea.Msg {
