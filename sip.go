@@ -48,6 +48,10 @@ type Session interface {
 	// This is required for Bubble Tea to properly detect terminal mode.
 	Fd() uintptr
 
+	// PtySlave returns the underlying PTY slave file for direct I/O.
+	// Bubble Tea requires the actual *os.File to set raw mode properly.
+	PtySlave() *os.File
+
 	// WindowChanges returns a channel that receives window size changes.
 	WindowChanges() <-chan WindowSize
 }
@@ -158,9 +162,11 @@ func (s *Server) ServeWithProgram(ctx context.Context, handler ProgramHandler) e
 }
 
 // MakeOptions returns tea.ProgramOptions configured for the web session.
-// This sets up proper I/O and filters suspend messages.
+// This sets up proper I/O using the actual PTY slave file.
+// Bubble Tea requires the real *os.File to enable raw mode and disable echo.
 func MakeOptions(sess Session) []tea.ProgramOption {
 	pty := sess.Pty()
+	ptySlave := sess.PtySlave()
 	envs := []string{
 		"TERM=xterm-256color",
 		"COLORTERM=truecolor",
@@ -172,8 +178,8 @@ func MakeOptions(sess Session) []tea.ProgramOption {
 	}
 
 	return []tea.ProgramOption{
-		tea.WithInput(sess),
-		tea.WithOutput(sess),
+		tea.WithInput(ptySlave),
+		tea.WithOutput(ptySlave),
 		tea.WithWindowSize(pty.Width, pty.Height),
 		tea.WithEnvironment(envs),
 		tea.WithFilter(func(_ tea.Model, msg tea.Msg) tea.Msg {

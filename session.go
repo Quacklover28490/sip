@@ -65,6 +65,10 @@ func (s *webSession) Fd() uintptr {
 	return 0
 }
 
+func (s *webSession) PtySlave() *os.File {
+	return s.ptySlave
+}
+
 func (s *webSession) Done() <-chan struct{} {
 	return s.ctx.Done()
 }
