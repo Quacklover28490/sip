@@ -168,20 +168,30 @@ func (s *Server) ServeWithProgram(ctx context.Context, handler ProgramHandler) e
 func MakeOptions(sess Session) []tea.ProgramOption {
 	pty := sess.Pty()
 	ptySlave := sess.PtySlave()
-	envs := []string{
-		"TERM=xterm-256color",
-		"COLORTERM=truecolor",
-	}
 
-	// Get real environment and merge
+	// Start with real environment, filtering out terminal-related vars
+	var envs []string
 	for _, e := range os.Environ() {
+		// Skip terminal vars - we'll set our own
+		if len(e) >= 5 && e[:5] == "TERM=" {
+			continue
+		}
+		if len(e) >= 10 && e[:10] == "COLORTERM=" {
+			continue
+		}
 		envs = append(envs, e)
 	}
+
+	// Add terminal settings LAST so they take precedence
+	envs = append(envs,
+		"TERM=xterm-256color",
+		"COLORTERM=truecolor",
+	)
 
 	return []tea.ProgramOption{
 		tea.WithInput(ptySlave),
 		tea.WithOutput(ptySlave),
-		tea.WithColorProfile(colorprofile.Env(envs)),
+		tea.WithColorProfile(colorprofile.TrueColor),
 		tea.WithWindowSize(pty.Width, pty.Height),
 		tea.WithEnvironment(envs),
 		tea.WithFilter(func(_ tea.Model, msg tea.Msg) tea.Msg {
