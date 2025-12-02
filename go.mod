@@ -1,10 +1,10 @@
 module github.com/Gaurav-Gosain/sip
 
-go 1.24.0
+go 1.24.2
 
 require (
 	github.com/charmbracelet/bubbletea/v2 v2.0.0-beta.6
-	github.com/charmbracelet/lipgloss/v2 v2.0.0-beta1
+	github.com/charmbracelet/lipgloss/v2 v2.0.0-beta.3.0.20250917201909-41ff0bf215ea
 	github.com/charmbracelet/log v0.4.2
 	github.com/charmbracelet/x/xpty v0.1.3
 	github.com/coder/websocket v1.8.13
