@@ -29,6 +29,8 @@ func init() {
 		ReportTimestamp: true,
 		Prefix:          "sip",
 	})
+	// Disable ANSI colors to prevent escape sequences from leaking
+	logger.SetColorProfile(0) // 0 = NoTTY = no colors
 }
 
 // httpServer is the internal HTTP server implementation.
