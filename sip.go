@@ -21,6 +21,7 @@ package sip
 
 import (
 	"context"
+	"io"
 	"os"
 	"time"
 
@@ -163,8 +164,8 @@ func (s *Server) ServeWithProgram(ctx context.Context, handler ProgramHandler) e
 }
 
 // MakeOptions returns tea.ProgramOptions configured for the web session.
-// This sets up proper I/O using the actual PTY slave file.
-// Bubble Tea requires the real *os.File to enable raw mode and disable echo.
+// On Unix, this uses the PTY slave file for proper raw mode support.
+// On Windows, this uses the Session's Reader/Writer interface with pipes.
 func MakeOptions(sess Session) []tea.ProgramOption {
 	pty := sess.Pty()
 	ptySlave := sess.PtySlave()
@@ -188,9 +189,22 @@ func MakeOptions(sess Session) []tea.ProgramOption {
 		"COLORTERM=truecolor",
 	)
 
-	return []tea.ProgramOption{
-		tea.WithInput(ptySlave),
-		tea.WithOutput(ptySlave),
+	// Determine input/output based on platform
+	var input io.Reader
+	var output io.Writer
+	if ptySlave != nil {
+		// Unix: use the actual PTY slave file for raw mode support
+		input = ptySlave
+		output = ptySlave
+	} else {
+		// Windows: use the Session's Reader/Writer (pipe-based)
+		input = sess.(io.Reader)
+		output = sess.(io.Writer)
+	}
+
+	opts := []tea.ProgramOption{
+		tea.WithInput(input),
+		tea.WithOutput(output),
 		tea.WithColorProfile(colorprofile.TrueColor),
 		tea.WithWindowSize(pty.Width, pty.Height),
 		tea.WithEnvironment(envs),
@@ -201,6 +215,8 @@ func MakeOptions(sess Session) []tea.ProgramOption {
 			return msg
 		}),
 	}
+
+	return opts
 }
 
 // newDefaultProgramHandler wraps a Handler into a ProgramHandler.

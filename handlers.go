@@ -64,6 +64,22 @@ type OptionsMessage struct {
 	ReadOnly bool `json:"readOnly"`
 }
 
+// internalSession is the interface that both webSession and cmdSession implement
+// for use by the HTTP handlers.
+type internalSession interface {
+	OutputReader() io.Reader
+	InputWriter() io.Writer
+	Resize(cols, rows int)
+	Done() <-chan struct{}
+}
+
+// sessionInfo holds common session metadata for logging.
+type sessionInfo struct {
+	id   string
+	cols int
+	rows int
+}
+
 func (s *httpServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	if !s.checkConnectionLimit() {
 		http.Error(w, "Maximum connections reached", http.StatusServiceUnavailable)
@@ -108,26 +124,50 @@ func (s *httpServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	startTime := time.Now()
-	session, err := s.createSession(ctx, s.handler, cols, rows)
-	if err != nil {
-		logger.Error("session creation failed", "err", err, "remote", r.RemoteAddr)
-		_ = conn.Close(websocket.StatusInternalError, err.Error())
-		return
+
+	// Determine session type based on mode (command or Bubble Tea)
+	var session internalSession
+	var info sessionInfo
+	var closeFunc func()
+
+	if s.cmdHandler != nil {
+		// Command mode: spawn external command
+		cmdSess, err := s.createCmdSession(ctx, cols, rows)
+		if err != nil {
+			logger.Error("command session creation failed", "err", err, "remote", r.RemoteAddr)
+			_ = conn.Close(websocket.StatusInternalError, err.Error())
+			return
+		}
+		session = cmdSess
+		info = sessionInfo{id: cmdSess.id, cols: cmdSess.cols, rows: cmdSess.rows}
+		closeFunc = func() { s.closeCmdSession(cmdSess) }
+	} else {
+		// Bubble Tea mode: run in-process
+		webSess, err := s.createSession(ctx, s.handler, cols, rows)
+		if err != nil {
+			logger.Error("session creation failed", "err", err, "remote", r.RemoteAddr)
+			_ = conn.Close(websocket.StatusInternalError, err.Error())
+			return
+		}
+		session = webSess
+		info = sessionInfo{id: webSess.id, cols: webSess.cols, rows: webSess.rows}
+		closeFunc = func() { s.closeSession(webSess) }
 	}
+
 	defer func() {
-		s.closeSession(session)
+		closeFunc()
 		logger.Info("WebSocket session ended",
-			"session", session.id,
+			"session", info.id,
 			"remote", r.RemoteAddr,
 			"duration", time.Since(startTime).Round(time.Second),
 		)
 	}()
 
 	logger.Info("WebSocket session started",
-		"session", session.id,
+		"session", info.id,
 		"remote", r.RemoteAddr,
-		"cols", session.cols,
-		"rows", session.rows,
+		"cols", info.cols,
+		"rows", info.rows,
 	)
 
 	optionsData, _ := json.Marshal(OptionsMessage{ReadOnly: s.config.ReadOnly})
@@ -139,13 +179,13 @@ func (s *httpServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer wg.Done()
 		defer cancel()
-		s.streamPTYToWebSocket(ctx, conn, session)
+		s.streamOutputToWebSocket(ctx, conn, session, info)
 	}()
 
 	go func() {
 		defer wg.Done()
 		defer cancel()
-		s.handleWebSocketInput(ctx, conn, session)
+		s.handleWebSocketInput(ctx, conn, session, info)
 	}()
 
 	wg.Wait()
@@ -198,25 +238,48 @@ func (s *httpServer) handleWebTransport(w http.ResponseWriter, r *http.Request) 
 	}
 
 	startTime := time.Now()
-	session, err := s.createSession(ctx, s.handler, cols, rows)
-	if err != nil {
-		logger.Error("session creation failed", "err", err, "remote", r.RemoteAddr)
-		return
+
+	// Determine session type based on mode (command or Bubble Tea)
+	var session internalSession
+	var info sessionInfo
+	var closeFunc func()
+
+	if s.cmdHandler != nil {
+		// Command mode: spawn external command
+		cmdSess, err := s.createCmdSession(ctx, cols, rows)
+		if err != nil {
+			logger.Error("command session creation failed", "err", err, "remote", r.RemoteAddr)
+			return
+		}
+		session = cmdSess
+		info = sessionInfo{id: cmdSess.id, cols: cmdSess.cols, rows: cmdSess.rows}
+		closeFunc = func() { s.closeCmdSession(cmdSess) }
+	} else {
+		// Bubble Tea mode: run in-process
+		webSess, err := s.createSession(ctx, s.handler, cols, rows)
+		if err != nil {
+			logger.Error("session creation failed", "err", err, "remote", r.RemoteAddr)
+			return
+		}
+		session = webSess
+		info = sessionInfo{id: webSess.id, cols: webSess.cols, rows: webSess.rows}
+		closeFunc = func() { s.closeSession(webSess) }
 	}
+
 	defer func() {
-		s.closeSession(session)
+		closeFunc()
 		logger.Info("WebTransport session ended",
-			"session", session.id,
+			"session", info.id,
 			"remote", r.RemoteAddr,
 			"duration", time.Since(startTime).Round(time.Second),
 		)
 	}()
 
 	logger.Info("WebTransport session started",
-		"session", session.id,
+		"session", info.id,
 		"remote", r.RemoteAddr,
-		"cols", session.cols,
-		"rows", session.rows,
+		"cols", info.cols,
+		"rows", info.rows,
 	)
 
 	optionsData, _ := json.Marshal(OptionsMessage{ReadOnly: s.config.ReadOnly})
@@ -228,20 +291,20 @@ func (s *httpServer) handleWebTransport(w http.ResponseWriter, r *http.Request) 
 	go func() {
 		defer wg.Done()
 		defer cancel()
-		s.streamPTYToWebTransport(ctx, stream, session)
+		s.streamOutputToWebTransport(ctx, stream, session, info)
 	}()
 
 	go func() {
 		defer wg.Done()
 		defer cancel()
-		s.handleWebTransportInput(ctx, stream, session)
+		s.handleWebTransportInput(ctx, stream, session, info)
 	}()
 
 	wg.Wait()
 	<-wtSession.Context().Done()
 }
 
-func (s *httpServer) streamPTYToWebSocket(ctx context.Context, conn *websocket.Conn, session *webSession) {
+func (s *httpServer) streamOutputToWebSocket(ctx context.Context, conn *websocket.Conn, session internalSession, info sessionInfo) {
 	bufPtr := readBufPool.Get().(*[]byte)
 	buf := *bufPtr
 	defer readBufPool.Put(bufPtr)
@@ -256,18 +319,18 @@ func (s *httpServer) streamPTYToWebSocket(ctx context.Context, conn *websocket.C
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Debug("WebSocket output stopped (context)", "session", session.id, "bytes_sent", totalBytes)
+			logger.Debug("WebSocket output stopped (context)", "session", info.id, "bytes_sent", totalBytes)
 			return
 		case <-session.Done():
-			logger.Debug("session ended, sending close", "session", session.id)
+			logger.Debug("session ended, sending close", "session", info.id)
 			_ = conn.Write(ctx, websocket.MessageBinary, []byte{MsgClose})
 			return
 		default:
 		}
 
-		n, err := session.ptyMaster.Read(buf)
+		n, err := session.OutputReader().Read(buf)
 		if err != nil {
-			logger.Debug("output closed", "session", session.id, "bytes_sent", totalBytes, "error", err)
+			logger.Debug("output closed", "session", info.id, "bytes_sent", totalBytes, "error", err)
 			_ = conn.Write(ctx, websocket.MessageBinary, []byte{MsgClose})
 			return
 		}
@@ -276,19 +339,19 @@ func (s *httpServer) streamPTYToWebSocket(ctx context.Context, conn *websocket.C
 		}
 
 		if totalBytes == 0 {
-			logger.Debug("first output received", "session", session.id, "bytes", n)
+			logger.Debug("first output received", "session", info.id, "bytes", n)
 		}
 
 		totalBytes += int64(n)
 		copy(msg[1:], buf[:n])
 		if err := conn.Write(ctx, websocket.MessageBinary, msg[:n+1]); err != nil {
-			logger.Debug("WebSocket write error", "session", session.id, "err", err)
+			logger.Debug("WebSocket write error", "session", info.id, "err", err)
 			return
 		}
 	}
 }
 
-func (s *httpServer) streamPTYToWebTransport(ctx context.Context, stream *webtransport.Stream, session *webSession) {
+func (s *httpServer) streamOutputToWebTransport(ctx context.Context, stream *webtransport.Stream, session internalSession, info sessionInfo) {
 	bufPtr := readBufPool.Get().(*[]byte)
 	buf := *bufPtr
 	defer readBufPool.Put(bufPtr)
@@ -302,18 +365,18 @@ func (s *httpServer) streamPTYToWebTransport(ctx context.Context, stream *webtra
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Debug("WebTransport output stopped (context)", "session", session.id, "bytes_sent", totalBytes)
+			logger.Debug("WebTransport output stopped (context)", "session", info.id, "bytes_sent", totalBytes)
 			return
 		case <-session.Done():
-			logger.Debug("session ended, sending close", "session", session.id)
+			logger.Debug("session ended, sending close", "session", info.id)
 			_ = writeFramed(stream, []byte{MsgClose})
 			return
 		default:
 		}
 
-		n, err := session.ptyMaster.Read(buf)
+		n, err := session.OutputReader().Read(buf)
 		if err != nil {
-			logger.Debug("output closed", "session", session.id, "bytes_sent", totalBytes, "error", err)
+			logger.Debug("output closed", "session", info.id, "bytes_sent", totalBytes, "error", err)
 			_ = writeFramed(stream, []byte{MsgClose})
 			return
 		}
@@ -326,7 +389,7 @@ func (s *httpServer) streamPTYToWebTransport(ctx context.Context, stream *webtra
 			if debugBytes > 100 {
 				debugBytes = 100
 			}
-			logger.Debug("first output received (WT)", "session", session.id, "bytes", n, "first_bytes", fmt.Sprintf("%q", string(buf[:debugBytes])))
+			logger.Debug("first output received (WT)", "session", info.id, "bytes", n, "first_bytes", fmt.Sprintf("%q", string(buf[:debugBytes])))
 		}
 
 		totalBytes += int64(n)
@@ -337,20 +400,20 @@ func (s *httpServer) streamPTYToWebTransport(ctx context.Context, stream *webtra
 		copy(frame[5:], buf[:n])
 
 		if _, err := stream.Write(frame[:5+n]); err != nil {
-			logger.Debug("WebTransport write error", "session", session.id, "err", err)
+			logger.Debug("WebTransport write error", "session", info.id, "err", err)
 			return
 		}
 	}
 }
 
-func (s *httpServer) handleWebSocketInput(ctx context.Context, conn *websocket.Conn, session *webSession) {
+func (s *httpServer) handleWebSocketInput(ctx context.Context, conn *websocket.Conn, session internalSession, info sessionInfo) {
 	var totalBytes int64
 	var msgCount int64
 
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Debug("WebSocket input stopped", "session", session.id, "messages", msgCount, "bytes", totalBytes)
+			logger.Debug("WebSocket input stopped", "session", info.id, "messages", msgCount, "bytes", totalBytes)
 			return
 		case <-session.Done():
 			return
@@ -364,11 +427,11 @@ func (s *httpServer) handleWebSocketInput(ctx context.Context, conn *websocket.C
 
 		totalBytes += int64(len(data))
 		msgCount++
-		s.processInput(data, session)
+		s.processInput(data, session, info)
 	}
 }
 
-func (s *httpServer) handleWebTransportInput(ctx context.Context, stream *webtransport.Stream, session *webSession) {
+func (s *httpServer) handleWebTransportInput(ctx context.Context, stream *webtransport.Stream, session internalSession, info sessionInfo) {
 	lenBuf := make([]byte, 4)
 	var totalBytes int64
 	var msgCount int64
@@ -376,7 +439,7 @@ func (s *httpServer) handleWebTransportInput(ctx context.Context, stream *webtra
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Debug("WebTransport input stopped", "session", session.id, "messages", msgCount, "bytes", totalBytes)
+			logger.Debug("WebTransport input stopped", "session", info.id, "messages", msgCount, "bytes", totalBytes)
 			return
 		case <-session.Done():
 			return
@@ -389,7 +452,7 @@ func (s *httpServer) handleWebTransportInput(ctx context.Context, stream *webtra
 
 		length := binary.BigEndian.Uint32(lenBuf)
 		if length > 1024*1024 {
-			logger.Warn("message too large", "session", session.id, "size", length)
+			logger.Warn("message too large", "session", info.id, "size", length)
 			return
 		}
 
@@ -408,11 +471,11 @@ func (s *httpServer) handleWebTransportInput(ctx context.Context, stream *webtra
 
 		totalBytes += int64(length)
 		msgCount++
-		s.processInput(msg, session)
+		s.processInput(msg, session, info)
 	}
 }
 
-func (s *httpServer) processInput(data []byte, session *webSession) {
+func (s *httpServer) processInput(data []byte, session internalSession, info sessionInfo) {
 	if len(data) == 0 {
 		return
 	}
@@ -423,18 +486,18 @@ func (s *httpServer) processInput(data []byte, session *webSession) {
 	switch msgType {
 	case MsgInput:
 		if !s.config.ReadOnly {
-			_, _ = session.ptyMaster.Write(payload)
+			_, _ = session.InputWriter().Write(payload)
 		}
 
 	case MsgResize:
 		var resize ResizeMessage
 		if err := json.Unmarshal(payload, &resize); err != nil {
-			logger.Warn("invalid resize message", "session", session.id, "err", err)
+			logger.Warn("invalid resize message", "session", info.id, "err", err)
 			return
 		}
 		session.Resize(resize.Cols, resize.Rows)
 		logger.Debug("terminal resized",
-			"session", session.id,
+			"session", info.id,
 			"to", []int{resize.Cols, resize.Rows},
 		)
 

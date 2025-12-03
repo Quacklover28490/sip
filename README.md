@@ -25,7 +25,27 @@ Sip is a Go library that allows you to serve any [Bubble Tea](https://github.com
 go get github.com/Gaurav-Gosain/sip
 ```
 
-## Quick Start
+## CLI Usage
+
+Sip also provides a CLI to wrap any command and expose it through the browser:
+
+```bash
+# Install the CLI
+go install github.com/Gaurav-Gosain/sip/cmd/sip@latest
+
+# Run htop in browser
+sip -- htop
+
+# Run on a specific port
+sip -p 8080 -- claude -c
+
+# Expose on all interfaces
+sip --host 0.0.0.0 -- bash
+```
+
+Then open http://localhost:7681 in your browser.
+
+## Library Usage (Quick Start)
 
 ```go
 package main

@@ -3,22 +3,19 @@ package sip
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
-	"runtime"
 	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea/v2"
-	xpty "github.com/charmbracelet/x/xpty"
 )
 
 // webSession implements the Session interface for web terminal connections.
 type webSession struct {
 	id            string
 	program       *tea.Program
-	pty           xpty.Pty
-	ptyMaster     *os.File
-	ptySlave      *os.File
+	platform      *platformPty
 	cols          int
 	rows          int
 	cancelFunc    context.CancelFunc
@@ -41,17 +38,11 @@ func (s *webSession) Context() context.Context {
 }
 
 func (s *webSession) Read(p []byte) (n int, err error) {
-	if s.ptySlave != nil {
-		return s.ptySlave.Read(p)
-	}
-	return 0, fmt.Errorf("session not initialized")
+	return s.platform.SlaveReader().Read(p)
 }
 
 func (s *webSession) Write(p []byte) (n int, err error) {
-	if s.ptySlave != nil {
-		return s.ptySlave.Write(p)
-	}
-	return 0, fmt.Errorf("session not initialized")
+	return s.platform.SlaveWriter().Write(p)
 }
 
 func (s *webSession) WindowChanges() <-chan WindowSize {
@@ -59,14 +50,11 @@ func (s *webSession) WindowChanges() <-chan WindowSize {
 }
 
 func (s *webSession) Fd() uintptr {
-	if s.ptySlave != nil {
-		return s.ptySlave.Fd()
-	}
-	return 0
+	return s.platform.SlaveFd()
 }
 
 func (s *webSession) PtySlave() *os.File {
-	return s.ptySlave
+	return s.platform.SlaveFile()
 }
 
 func (s *webSession) Done() <-chan struct{} {
@@ -79,8 +67,8 @@ func (s *webSession) Resize(cols, rows int) {
 	s.rows = rows
 	s.mu.Unlock()
 
-	if s.pty != nil {
-		_ = s.pty.Resize(cols, rows)
+	if s.platform != nil {
+		_ = s.platform.Resize(cols, rows)
 	}
 
 	select {
@@ -97,6 +85,16 @@ func (s *webSession) WaitForStart() {
 	<-s.started
 }
 
+// OutputReader returns the reader for terminal output (for handlers).
+func (s *webSession) OutputReader() io.Reader {
+	return s.platform.OutputReader()
+}
+
+// InputWriter returns the writer for terminal input (for handlers).
+func (s *webSession) InputWriter() io.Writer {
+	return s.platform.InputWriter()
+}
+
 func (srv *httpServer) createSession(ctx context.Context, handler ProgramHandler, initialCols, initialRows int) (*webSession, error) {
 	cols, rows := initialCols, initialRows
 	if cols <= 0 {
@@ -108,20 +106,9 @@ func (srv *httpServer) createSession(ctx context.Context, handler ProgramHandler
 
 	logger.Debug("creating session", "cols", cols, "rows", rows)
 
-	ptyInstance, err := xpty.NewPty(cols, rows)
+	platform, err := newPlatformPty(cols, rows)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open PTY: %w", err)
-	}
-
-	var ptyMaster, ptySlave *os.File
-	if runtime.GOOS != "windows" {
-		unixPty, ok := ptyInstance.(*xpty.UnixPty)
-		if !ok {
-			_ = ptyInstance.Close()
-			return nil, fmt.Errorf("expected UnixPty on %s", runtime.GOOS)
-		}
-		ptyMaster = unixPty.Master()
-		ptySlave = unixPty.Slave()
+		return nil, fmt.Errorf("failed to create PTY: %w", err)
 	}
 
 	sessionCtx, cancel := context.WithCancel(ctx)
@@ -130,9 +117,7 @@ func (srv *httpServer) createSession(ctx context.Context, handler ProgramHandler
 
 	session := &webSession{
 		id:            fmt.Sprintf("%d", time.Now().UnixNano()),
-		pty:           ptyInstance,
-		ptyMaster:     ptyMaster,
-		ptySlave:      ptySlave,
+		platform:      platform,
 		cols:          cols,
 		rows:          rows,
 		cancelFunc:    cancel,
@@ -146,7 +131,7 @@ func (srv *httpServer) createSession(ctx context.Context, handler ProgramHandler
 	// The handler should use MakeOptions(session) to configure I/O
 	program := handler(session)
 	if program == nil {
-		_ = ptyInstance.Close()
+		_ = platform.Close()
 		cancel()
 		return nil, fmt.Errorf("handler returned nil program")
 	}
@@ -154,7 +139,7 @@ func (srv *httpServer) createSession(ctx context.Context, handler ProgramHandler
 
 	go func() {
 		defer func() {
-			_ = ptyInstance.Close()
+			_ = platform.Close()
 			cancel()
 		}()
 
@@ -190,8 +175,8 @@ func (srv *httpServer) closeSession(session *webSession) {
 
 	session.cancelFunc()
 
-	if session.pty != nil {
-		_ = session.pty.Close()
+	if session.platform != nil {
+		_ = session.platform.Close()
 	}
 
 	srv.sessions.Delete(session.id)

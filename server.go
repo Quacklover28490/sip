@@ -37,6 +37,7 @@ func init() {
 type httpServer struct {
 	config     Config
 	handler    ProgramHandler
+	cmdHandler *CommandHandler // For CLI mode (spawning commands)
 	httpServer *http.Server
 	wtServer   *webtransport.Server
 	sessions   sync.Map
@@ -136,7 +137,7 @@ func (s *httpServer) start(ctx context.Context) error {
 			"addr", wtAddr,
 			"protocol", "QUIC/UDP",
 		)
-		if err := s.wtServer.ListenAndServe(); err != nil {
+		if err := s.wtServer.ListenAndServe(); err != nil && err.Error() != "http: Server closed" {
 			logger.Warn("WebTransport server error", "err", err)
 		}
 	}()
@@ -148,7 +149,22 @@ func (s *httpServer) start(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		logger.Info("shutting down web server")
-		_ = s.httpServer.Shutdown(ctx)
+
+		// Close all active sessions first
+		s.sessions.Range(func(key, value any) bool {
+			if sess, ok := value.(*cmdSession); ok {
+				s.closeCmdSession(sess)
+			} else if sess, ok := value.(*webSession); ok {
+				s.closeSession(sess)
+			}
+			return true
+		})
+
+		// Use fresh context with timeout for graceful shutdown
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		_ = s.httpServer.Shutdown(shutdownCtx)
 		_ = s.wtServer.Close()
 		return nil
 	case err := <-errChan:

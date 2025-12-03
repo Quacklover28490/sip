@@ -1,0 +1,94 @@
+//go:build windows
+// +build windows
+
+package sip
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+
+	xpty "github.com/charmbracelet/x/xpty"
+)
+
+// cmdPlatformPty holds platform-specific PTY resources for command execution.
+type cmdPlatformPty struct {
+	pty xpty.Pty
+	cmd *exec.Cmd
+}
+
+// newCmdPlatformPty creates a new PTY and spawns the command on Windows.
+func newCmdPlatformPty(name string, args []string, dir string, cols, rows int) (*cmdPlatformPty, error) {
+	ptyInstance, err := xpty.NewPty(cols, rows)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open PTY: %w", err)
+	}
+
+	// Set up command
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"TERM=xterm-256color",
+		"COLORTERM=truecolor",
+	)
+
+	// Start the command with PTY (xpty handles Windows ConPTY setup)
+	if err := ptyInstance.Start(cmd); err != nil {
+		_ = ptyInstance.Close()
+		return nil, fmt.Errorf("failed to start command: %w", err)
+	}
+
+	return &cmdPlatformPty{
+		pty: ptyInstance,
+		cmd: cmd,
+	}, nil
+}
+
+// Close closes the PTY and waits for the command to exit.
+func (p *cmdPlatformPty) Close() error {
+	if p.pty != nil {
+		_ = p.pty.Close()
+	}
+	if p.cmd != nil && p.cmd.Process != nil {
+		_ = p.cmd.Process.Kill()
+		// On Windows, use xpty.WaitProcess for proper ConPTY handling
+		_ = xpty.WaitProcess(context.Background(), p.cmd)
+	}
+	return nil
+}
+
+// Resize resizes the PTY.
+func (p *cmdPlatformPty) Resize(cols, rows int) error {
+	if p.pty != nil {
+		return p.pty.Resize(cols, rows)
+	}
+	return nil
+}
+
+// OutputReader returns an io.Reader for reading command output.
+func (p *cmdPlatformPty) OutputReader() io.Reader {
+	return p.pty
+}
+
+// InputWriter returns an io.Writer for writing command input.
+func (p *cmdPlatformPty) InputWriter() io.Writer {
+	return p.pty
+}
+
+// Wait waits for the command to exit.
+func (p *cmdPlatformPty) Wait() error {
+	if p.cmd != nil {
+		return xpty.WaitProcess(context.Background(), p.cmd)
+	}
+	return nil
+}
+
+// Process returns the underlying process.
+func (p *cmdPlatformPty) Process() *os.Process {
+	if p.cmd != nil {
+		return p.cmd.Process
+	}
+	return nil
+}
